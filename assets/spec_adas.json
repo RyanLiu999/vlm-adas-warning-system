@@ -1,0 +1,69 @@
+{
+  "task": "ADAS_warning_inference_prompt",
+  "version": "v1",
+  "description": "Structured specification for offline LLM-based prompt compiler. Defines operational rules for each warning type. Runtime camera meta and JSON output schema are handled separately. This version loosens trigger criteria to reduce over-conservative SAFE outputs.",
+  "warning_types": {
+    "FCW": {
+      "name": "Forward Collision Warning",
+      "description": "Potential forward collision risk with a lead vehicle/obstacle or a rapid cut-in into the ego path. Prefer early warning when evidence is consistent, even if not extreme.",
+      "core_cues": [
+        "Potential hazard object is in or entering the ego-path region (center corridor or projected ego lane) OR is rapidly moving into it",
+        "Closing evidence observed across frames, where closing evidence can be ANY of: noticeable size growth OR decreasing gap/relative distance impression OR forward expansion/downward shift of the object footprint",
+        "Rapid cut-in evidence: lateral intrusion toward the ego path with short time gap (may occur without clear size growth initially)",
+        "Object stays near the image centerline over time OR shows a trajectory that converges toward the ego path"
+      ],
+      "temporal_behavior": [
+        "Use a recent short time window (e.g., past ~2 seconds)",
+        "Trigger can be supported by as few as 2 consistent frames when the hazard is clear; otherwise prefer >=3 frames",
+        "Do not require multiple independent cues simultaneously; a single strong cue with consistency is acceptable",
+        "Suppress single-frame anomalies unless the cut-in is extreme and obvious"
+      ],
+      "exclusion_rules": [
+        "Ignore ego hood/dash reflections, windshield glare, and strong compression artifacts",
+        "Ignore static roadside objects clearly outside the ego path (guardrails, signs) unless they intrude into the ego path",
+        "Ignore adjacent-lane vehicles that remain stable and do not converge toward the ego path",
+        "Ignore overhead structures and far background objects with no closing evidence"
+      ],
+      "tie_breaker_guidance": [
+        "If cues suggest closing in the ego path and are consistent, prefer triggering FCW (tolerate some false positives)",
+        "If the object remains clearly outside the ego path and does not converge, suppress FCW",
+        "If evidence is mixed, prioritize the pattern that indicates the shortest time gap (e.g., rapid cut-in) over weaker closing cues"
+      ]
+    },
+    "LDW": {
+      "name": "Lane Departure Warning",
+      "description": "Ego vehicle drifts toward a lane boundary or crosses it while lane markings are visible and there is no clear lane-change intent. Allow pre-departure drift warnings (before crossing) when evidence persists.",
+      "core_cues": [
+        "Lane markings (left/right boundary) are visible and reliable in multiple frames",
+        "Vehicle position drifts toward a lane boundary (decreasing lateral margin) with a consistent direction across frames",
+        "Lane boundary overlap/crossing is a strong trigger but not required; approaching the boundary with persistence can also trigger",
+        "Lane centerline shift relative to image center can be used as supporting evidence when boundary is visible"
+      ],
+      "temporal_behavior": [
+        "Prefer persistence across >=2 frames (at ~5 fps) for early drift; use >=3 frames when drift is subtle",
+        "Crossing/overlap can trigger with fewer frames if clearly observed",
+        "Do not trigger on transient jitter, single-frame lane detection noise, or brief blur/shake"
+      ],
+      "exclusion_rules": [
+        "Suppress when lane markings are not visible/reliable; do not infer departure purely from perspective distortion",
+        "Suppress for clear intentional lane change cues when strongly indicated (sustained steering progression + consistent lateral motion), but do not over-suppress",
+        "Suppress when road curvature explains lane center shift and the vehicle stays within boundaries",
+        "Suppress during heavy blur, strong camera shake, or severe artifacts that break lane reliability"
+      ],
+      "tie_breaker_guidance": [
+        "If boundary overlap/crossing is observed, prioritize LDW",
+        "If only approaching boundary is observed, require persistence and a decreasing margin trend",
+        "If intent is ambiguous but drift toward boundary is consistent, allow LDW with lower confidence rather than always SAFE"
+      ]
+    }
+  },
+  "constraints": {
+    "max_simultaneous_warnings": 2,
+    "require_visual_evidence": true,
+    "past_only_reasoning": true,
+    "design_philosophy": {
+      "FCW": "Bias toward earlier warnings when consistent closing/cut-in evidence exists (lower miss tolerance).",
+      "LDW": "Bias toward reducing nuisance alerts, but allow pre-departure drift warnings when lane evidence is reliable."
+    }
+  }
+}
