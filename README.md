@@ -1,7 +1,9 @@
 # vlm-adas-warning-system
 A Cosmos Reason–powered ADAS warning system that compiles domain rules offline and performs strict-schema,  temporal inference on forward-facing video to output warnings with per-type explanations.
 
-## Vision-Based Central Decision Brain for ADAS Warnings (Cosmos Reason Powered)
+## 🔥Problem
+
+### Vision-Based Central Decision Brain for ADAS Warnings (Cosmos Reason Powered)
 
 In conventional ADAS architectures, warning functions such as FCW, LDW, and others are typically implemented as **independent subsystems**:
 
@@ -19,7 +21,7 @@ Each subsystem has its own perception stack, thresholds, and decision logic. Thi
 
 ---
 
-## A Different Approach: A Unified Reasoning Engine
+### A Different Approach: A Unified Reasoning Engine
 
 `vlm-adas-warning-system` rethinks the architecture.
 
@@ -44,7 +46,7 @@ to:
 
 ---
 
-## Why the Rule Compiler Matters
+## 💡Why the Rule Compiler Matters
 
 A key challenge of using VLMs for safety-related tasks is:
 
@@ -100,7 +102,7 @@ The warning prompt is no longer handcrafted; it is **compiled from a formal spec
 
 ---
 
-## End-to-End Pipeline
+## 🎬End-to-End Pipeline
 
 ![inferece-pipeline](doc/inference_warning_flow.png)
 
@@ -145,3 +147,203 @@ The engine outputs:
 All under strict schema validation and normalization.
 
 ---
+
+## 🔧Setup
+
+Clone the repository:
+
+```shell
+git clone https://github.com/RyanLiu999/vlm-adas-warning-system.git
+cd vlm-adas-warning-system
+```
+
+Please make sure you have access to Docker on your machine and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) is installed.
+
+Build the container:
+
+```bash
+image_tag=$(docker build -f Dockerfile --build-arg=CUDA_VERSION=12.8.1 -q .)
+```
+
+Run the container:
+
+```bash
+docker run -it --gpus all --ipc=host --rm -v .:/workspace -v /workspace/.venv -v /root/.cache:/root/.cache -e HF_TOKEN="$HF_TOKEN" $image_tag
+```
+
+## How to Run
+
+This project consists of two main stages:
+
+1. **Rule Compiler** – Convert `spec_adas.json` into a model-ready warning prompt  
+2. **Runtime Inference** – Run warning inference on a front-view video  
+
+---
+
+## 1️⃣ Rule Compiler
+
+Compile the ADAS specification file into a warning prompt text file.
+
+### Show all available arguments
+
+```bash
+python scripts/rule_compiler.py -h
+```
+
+### Basic usage
+
+```bash
+python scripts/rule_compiler.py \
+    --spec {path_to_spec_json} \
+    --out {path_to_output_warning_prompt}
+```
+
+### Example
+
+```bash
+python scripts/rule_compiler.py \
+    --spec assets/spec_adas.json \
+    --out assets/warning_prompt.txt
+```
+
+After execution, the following file will be generated:
+
+```
+assets/warning_prompt.txt
+```
+
+This file will be used in the runtime inference stage.
+
+---
+
+## 2️⃣ Runtime Inference
+
+Run warning inference using a front-view video and the compiled warning prompt.
+
+### Show all available arguments
+
+```bash
+python scripts/inference_warning.py -h
+```
+
+### Basic usage
+
+```bash
+python scripts/inference_warning.py \
+    --front {path_to_front_view_mp4} \
+    --warning-prompt {path_to_compiled_warning_prompt} \
+    --out {path_to_output_jsonl}
+```
+
+### Example
+
+```bash
+python scripts/inference_warning.py \
+    --front data/front_view.mp4 \
+    --warning-prompt assets/warning_prompt.txt \
+    --out outputs/alerts.jsonl
+```
+
+---
+
+## 🔎 Output Format
+
+The output file (`alerts.jsonl`) contains one JSON object per time window.  
+Each line represents the aggregated inference result for a specific timestamp.
+
+### Top-Level Structure
+
+Each record contains:
+
+- `ts_ms` — Timestamp (in milliseconds) for the current evaluation step  
+- `time_window_ms` — The time window used for inference  
+- `results` — Full structured results per warning type  
+- `warnings` — Flattened list of triggered warnings (for downstream consumption)  
+- `raw_model_output` — Original raw response from the model  
+- `parsed_model_json` — Parsed JSON extracted from the model response  
+
+---
+
+### Example Output
+
+```json
+{
+  "ts_ms": 2000,
+  "time_window_ms": [0, 2000],
+  "results": {
+    "FCW": {
+      "triggered": true,
+      "warning_direction": "RIGHT",
+      "reasoning": "A black sedan is seen moving rapidly toward the ego vehicle from the right side of the road, creating a potential collision risk.",
+      "safety_reason": "The black sedan maintains a close proximity to the ego vehicle, suggesting imminent contact if not avoided."
+    },
+    "LDW": {
+      "triggered": true,
+      "warning_direction": "RIGHT",
+      "reasoning": "The ego vehicle is drifting slightly to the right, nearing the lane boundary, indicating a potential lane departure.",
+      "safety_reason": "The vehicle's position shows a gradual shift toward the right edge of the lane, requiring corrective action to prevent crossing."
+    }
+  },
+  "warnings": [
+    {
+      "warning_type": "FCW",
+      "warning_direction": "RIGHT",
+      "reasoning": "A black sedan is seen moving rapidly toward the ego vehicle from the right side of the road, creating a potential collision risk."
+    },
+    {
+      "warning_type": "LDW",
+      "warning_direction": "RIGHT",
+      "reasoning": "The ego vehicle is drifting slightly to the right, nearing the lane boundary, indicating a potential lane departure."
+    }
+  ],
+  "raw_model_output": "...",
+  "parsed_model_json": {
+    "ts_ms": 2000,
+    "time_window_ms": [1800, 2000],
+    "results": {
+      "FCW": {
+        "triggered": true,
+        "warning_direction": "RIGHT",
+        "reasoning": "...",
+        "safety_reason": "..."
+      },
+      "LDW": {
+        "triggered": true,
+        "warning_direction": "RIGHT",
+        "reasoning": "...",
+        "safety_reason": "..."
+      }
+    }
+  }
+}
+```
+
+---
+
+### Design Notes
+
+- `results` preserves the full structured model reasoning.
+- `warnings` is a compact representation intended for visualization or real-time alert display.
+- `raw_model_output` is stored for debugging and traceability.
+- `parsed_model_json` reflects the model’s original JSON before post-processing or window alignment adjustments.
+
+This design ensures:
+- Full auditability  
+- Downstream compatibility  
+- Clear separation between model output and runtime-aligned output  
+---
+
+## Recommended Execution Flow
+
+```bash
+# Step 1: Compile rules
+python scripts/rule_compiler.py \
+    --spec assets/spec_adas.json \
+    --out assets/warning_prompt.txt
+
+# Step 2: Run inference
+python scripts/inference_warning.py \
+    --front data/front_view.mp4 \
+    --warning-prompt assets/warning_prompt.txt \
+    --out outputs/alerts.jsonl
+```
