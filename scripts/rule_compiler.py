@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-prompt_engineer.py
+rule_compiler.py
 
 Dynamic ADAS warning rule compiler with strict structural constraints
 to avoid over-conservative AND-style rules.
