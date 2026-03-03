@@ -46,9 +46,24 @@ to:
 
 ---
 
-## 💡Why the Rule Compiler Matters
+## 💡Rule Compiler Architecture
 
 A key challenge of using VLMs for safety-related tasks is:
+
+During the development of our ADAS warning inference system (e.g., FCW and LDW detection), we observed that model performance was highly sensitive to prompt phrasing. Small changes in wording often led to significant variations in model behavior.
+
+This revealed several systemic issues:
+
+- Excessive dependence on prompt engineering expertise
+- Effective prompts required deep experience and iterative experimentation.
+- Low maintainability
+- Any modification to warning logic required manual prompt rewriting.
+- Limited scalability
+- Prompt tuning did not generalize well across model versions.
+- Knowledge bottleneck risk
+- Performance quality became tied to individual expertise rather than system design.
+
+In short, the system relied too heavily on handcrafted prompts rather than structured decision logic.
 
 > **Prompt ambiguity and inconsistency.**
 
